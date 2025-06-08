@@ -107,7 +107,9 @@ def create_subagent_tool(mcp_agent, tool_name: str = "subagent", desc: str = Non
         "- If any required information is missing or unclear, the agent must rely only on the provided `context`. It must not access or explore other emails to guess missing data.\n"
         "- The output is a final answer generated after the agent completes reasoning and tool execution.\n"
         "- You should not assume the agent knows everything; it only knows what its tools allow it to observe or compute.\n"
+        "- To send an email, a valid and correctly formatted email address is required. If unknown, use the contact_agent to retrieve the correct email address.\n"
         "- Do not include multiple unrelated questions in a single input. The agent processes one task per request.\n"
+        "- Do not try to fabricate or guess email content.\n"
     )
 
     # Return as structured tool

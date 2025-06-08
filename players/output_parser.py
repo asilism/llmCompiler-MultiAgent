@@ -158,7 +158,6 @@ class LLMCompilerPlanParser(BaseTransformOutputParser[dict], extra="allow"):
 
     def _parse_task(self, line: str, thought: Optional[str] = None):
         print(f'@@ {__file__} >> _parse_task - line: {line}')
-        print(f'@@ {__file__} >> _parse_task - thought: {thought}')
         #print(f'@@ {__file__} >> _parse_task - self.tools: {self.tools}')
         task = None
         if match := re.match(THOUGHT_PATTERN, line):
@@ -176,5 +175,7 @@ class LLMCompilerPlanParser(BaseTransformOutputParser[dict], extra="allow"):
                 thought=thought,
             )
             thought = None
+
+        print(f'@@ {__file__} >> _parse_task - thought: {thought}')
         # Else it is just dropped
         return task, thought
