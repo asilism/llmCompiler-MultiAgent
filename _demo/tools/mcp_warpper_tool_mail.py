@@ -110,6 +110,9 @@ def create_subagent_tool(mcp_agent, tool_name: str = "subagent", desc: str = Non
         "- To send an email, a valid and correctly formatted email address is required. If unknown, use the contact_agent to retrieve the correct email address.\n"
         "- Do not include multiple unrelated questions in a single input. The agent processes one task per request.\n"
         "- Do not try to fabricate or guess email content.\n"
+        "- Do not send an email if the contact search returns multiple people with the same name.\n"
+        "- If multiple recipients are found, call HumanInTheLoop and ask the user to clarify who they mean.\n"
+        "- You must never choose a recipient without explicit confirmation from the user.\n"
     )
 
     # Return as structured tool

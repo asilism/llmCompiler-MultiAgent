@@ -5,6 +5,7 @@
 import re
 import time
 import itertools
+
 from typing import Any, Dict, Iterable, List, Union
 from typing_extensions import TypedDict
 from concurrent.futures import ThreadPoolExecutor, wait
@@ -59,6 +60,9 @@ def _execute_task(task, observations, config):
         )
     try:
         # return tool_to_use.invoke(resolved_args, config)
+        print('###############################')
+        print(f'Tool to use: {tool_to_use.name}')
+        print('###############################')
         output = tool_to_use.invoke(resolved_args, config)
         print(f'@@ {__file__} >> _execute_task: output={output}')
         return output

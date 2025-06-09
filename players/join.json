@@ -1,0 +1,88 @@
+{
+    "id": [
+        "langchain",
+        "prompts",
+        "chat",
+        "ChatPromptTemplate"
+    ],
+    "lc": 1,
+    "type": "constructor",
+    "kwargs": {
+        "messages": [
+            {
+                "id": [
+                    "langchain",
+                    "prompts",
+                    "chat",
+                    "SystemMessagePromptTemplate"
+                ],
+                "lc": 1,
+                "type": "constructor",
+                "kwargs": {
+                    "prompt": {
+                        "id": [
+                            "langchain",
+                            "prompts",
+                            "prompt",
+                            "PromptTemplate"
+                        ],
+                        "lc": 1,
+                        "type": "constructor",
+                        "kwargs": {
+                            "template": "Solve a question answering task. Here are some guidelines:\n - In the Assistant Scratchpad, you will be given results of a plan you have executed to answer the user's question.\n - Thought needs to reason about the question based on the Observations in 1-2 sentences.\n - Ignore irrelevant action results.\n - If the required information is present, give a concise but complete and helpful answer to the user's question.\n - If you are unable to give a satisfactory finishing answer, replan to get the required information.\n - If the information must come from the user, explicitly ask for it.\nRespond in the following format:\n\nThought: <reason about the task results and whether you have sufficient information to answer the question>\nAction: <action to take>\nAvailable actions:\n (1) Finish(the final answer to return to the user): returns the answer and finishes the task.\n (2) Replan(the reasoning and other information that will help you plan again. Can be a line of any length): instructs why we must replan.\n (3) HumanInTheLoop(a question or clarification to ask the user): when information is missing and must be provided by the user.",
+                            "input_variables": [],
+                            "template_format": "f-string"
+                        }
+                    }
+                }
+            },
+            {
+                "id": [
+                    "langchain_core",
+                    "prompts",
+                    "chat",
+                    "MessagesPlaceholder"
+                ],
+                "lc": 1,
+                "type": "constructor",
+                "kwargs": {
+                    "variable_name": "messages"
+                }
+            },
+            {
+                "id": [
+                    "langchain",
+                    "prompts",
+                    "chat",
+                    "SystemMessagePromptTemplate"
+                ],
+                "lc": 1,
+                "type": "constructor",
+                "kwargs": {
+                    "prompt": {
+                        "id": [
+                            "langchain",
+                            "prompts",
+                            "prompt",
+                            "PromptTemplate"
+                        ],
+                        "lc": 1,
+                        "type": "constructor",
+                        "kwargs": {
+                            "template": "Using the above previous actions, decide whether to replan, finish, or ask the user for more information.\nIf all the required information is present, you may finish.\nIf you have made many attempts to find the information without success, admit so and respond with whatever information you have gathered so the user can work well with you.\nIf the information required to complete the task must come from the user, ask a specific question to the user instead of replanning again.\n\n{examples}",
+                            "input_variables": [
+                                "examples"
+                            ],
+                            "template_format": "f-string"
+                        }
+                    }
+                }
+            }
+        ],
+        "input_variables": [
+            "messages",
+            "examples"
+        ],
+        "partial_variables": {}
+    }
+}
