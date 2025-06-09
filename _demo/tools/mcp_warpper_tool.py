@@ -15,6 +15,8 @@ from typing import List, get_type_hints, Optional
 from managers.llm_manager import LLM
 from langchain.schema.messages import ToolMessage
 
+from langchain_core.tools import tool
+
 # This function runs an async coroutine
 def async_to_sync_safe(coro):
     result = None
@@ -157,6 +159,11 @@ def generate_descriptions_for_tools(tools: List[BaseTool]) -> List[str]:
     tool_descriptions = [generate_tool_description(tool) for tool in tools]
     return header + "\n\n" + "\n\n".join(tool_descriptions)
 
+@tool
+def request_user_input_tool(question: str) -> str:
+    """Request additional input from the user. This tool should be called when more information is needed from the user to complete the task."""
+    return f"[HumanInTheLoop] {question}"
+
 def get_weather_agent_tool() -> StructuredTool:
     client = MultiServerMCPClient(
         {
@@ -168,6 +175,8 @@ def get_weather_agent_tool() -> StructuredTool:
     )
 
     tools = asyncio.run(client.get_tools())
+    tools.append(request_user_input_tool)
+
     desc = generate_descriptions_for_tools(tools)
 
     agent = create_react_agent(model=LLM.get(), tools=tools, prompt=desc)
