@@ -4,6 +4,7 @@
 
 import re
 import time
+import asyncio
 import itertools
 
 from typing import Any, Dict, Iterable, List, Union
@@ -13,7 +14,6 @@ from langchain_core.messages import BaseMessage, FunctionMessage
 from langchain_core.runnables import chain as as_runnable
 from langchain_core.runnables.base import Runnable
 from .output_parser import Task
-
 
 def _get_observations(messages: List[BaseMessage]) -> Dict[int, Any]:
     print(f'@@ {__file__} >> _get_observations: messages={messages}')
@@ -25,13 +25,12 @@ def _get_observations(messages: List[BaseMessage]) -> Dict[int, Any]:
     print(f'@@ {__file__} >> _get_observations: results={results}')
     return results
 
-
 class SchedulerInput(TypedDict):
     messages: List[BaseMessage]
     tasks: Iterable[Task]
 
 
-def _execute_task(task, observations, config):
+async def _execute_task(task, observations, config):
     print(f'@@ {__file__} >> _execute_task: task={task}')
     print(f'@@ {__file__} >> _execute_task: observations={observations}')
     print(f'@@ {__file__} >> _execute_task: config={config}')
@@ -63,7 +62,7 @@ def _execute_task(task, observations, config):
         print('###############################')
         print(f'Tool to use: {tool_to_use.name}')
         print('###############################')
-        output = tool_to_use.invoke(resolved_args, config)
+        output = await tool_to_use.ainvoke(resolved_args, config)
         print(f'@@ {__file__} >> _execute_task: output={output}')
         return output
     except Exception as e:
@@ -115,13 +114,13 @@ def _resolve_arg(arg: Union[str, Any], observations: Dict[int, Any]):
 
 
 @as_runnable
-def _schedule_task(task_inputs, config):
+async def _schedule_task(task_inputs, config):
     print(f'@@ {__file__} >> _schedule_task: task_inputs={task_inputs}')
     print(f'@@ {__file__} >> _schedule_task: config={config}')
     task: Task = task_inputs["task"]
     observations: Dict[int, Any] = task_inputs["observations"]
     try:
-        observation = _execute_task(task, observations, config)
+        observation = await _execute_task(task, observations, config)
     except Exception as e:
         import traceback
 
@@ -130,7 +129,7 @@ def _schedule_task(task_inputs, config):
     print(f'@@ {__file__} >> _schedule_task: observations={observations}')
 
 
-def _schedule_pending_task(
+async def _schedule_pending_task(
     task: Task, observations: Dict[int, Any], retry_after: float = 0.2
 ):
     print(f'@@ {__file__} >> _schedule_pending_task: task={task}')
@@ -140,14 +139,14 @@ def _schedule_pending_task(
         deps = task["dependencies"]
         if deps and (any([dep not in observations for dep in deps])):
             # Dependencies not yet satisfied
-            time.sleep(retry_after)
+            await asyncio.sleep(retry_after)
             continue
-        _schedule_task.invoke({"task": task, "observations": observations})
+        await _schedule_task.ainvoke({"task": task, "observations": observations})
         break
 
 
 @as_runnable
-def _schedule_tasks(scheduler_input: SchedulerInput) -> List[FunctionMessage]:
+async def _schedule_tasks(scheduler_input: SchedulerInput) -> List[FunctionMessage]:
     print(f'@@ {__file__} >> _schedule_tasks: scheduler_input={scheduler_input}')
     """Group the tasks into a DAG schedule."""
     # For streaming, we are making a few simplifying assumption:
@@ -166,33 +165,21 @@ def _schedule_tasks(scheduler_input: SchedulerInput) -> List[FunctionMessage]:
     originals = set(observations)
     # ^^ We assume each task inserts a different key above to
     # avoid race conditions...
-    futures = []
-    retry_after = 0.25  # Retry every quarter second
-    with ThreadPoolExecutor() as executor:
-        for task in tasks:
-            deps = task["dependencies"]
-            task_names[task["idx"]] = (
-                task["tool"] if isinstance(task["tool"], str) else task["tool"].name
-            )
-            args_for_tasks[task["idx"]] = task["args"]
-            if (
-                # Depends on other tasks
-                deps and (any([dep not in observations for dep in deps]))
-            ):
-                futures.append(
-                    executor.submit(
-                        _schedule_pending_task, task, observations, retry_after
-                    )
-                )
-            else:
-                # No deps or all deps satisfied
-                # can schedule now
-                _schedule_task.invoke(dict(task=task, observations=observations))
-                # futures.append(executor.submit(schedule_task.invoke, dict(task=task, observations=observations)))
+    retry_after = 0.2
+    tasks = []
+    for task in scheduler_input["tasks"]:
+        deps = task["dependencies"]
+        task_names[task["idx"]] = (
+            task["tool"] if isinstance(task["tool"], str) else task["tool"].name
+        )
+        args_for_tasks[task["idx"]] = task["args"]
 
-        # All tasks have been submitted or enqueued
-        # Wait for them to complete
-        wait(futures)
+        if deps and any([dep not in observations for dep in deps]):
+            tasks.append(asyncio.create_task(_schedule_pending_task(task, observations, retry_after)))
+        else:
+            tasks.append(asyncio.create_task(_schedule_task.ainvoke(dict(task=task, observations=observations))))
+    await asyncio.gather(*tasks)
+
     # Convert observations to new tool messages to add to the state
     new_observations = {
         k: (task_names[k], args_for_tasks[k], observations[k])
@@ -212,9 +199,8 @@ def _schedule_tasks(scheduler_input: SchedulerInput) -> List[FunctionMessage]:
 
 
 def build(planner: Runnable) -> Runnable:
-
     @as_runnable
-    def plan_and_schedule(state):
+    async def plan_and_schedule(state):
         print(f'@@ {__file__} >> plan_and_schedule: state={state}')
         messages = state["messages"]
         tasks = planner.stream(messages)
@@ -224,7 +210,7 @@ def build(planner: Runnable) -> Runnable:
         except StopIteration:
             # Handle the case where tasks is empty.
             tasks = iter([])
-        scheduled_tasks = _schedule_tasks.invoke({"messages": messages, "tasks": tasks})
+        scheduled_tasks = await _schedule_tasks.ainvoke({"messages": messages, "tasks": tasks})
         print(f'@@ {__file__} >> plan_and_schedule: scheduled_tasks={scheduled_tasks}')
         return {"messages": scheduled_tasks}
 

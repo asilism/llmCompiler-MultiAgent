@@ -55,7 +55,7 @@ async def generate_response(user_message: str) -> AsyncGenerator[bytes, None]:
     print('\n########## START ##########\n')
     yield '[Processing]'
     await asyncio.sleep(0.5)
-    for step in conductor.stream({"messages": messages}, config=config):
+    async for step in conductor.astream({"messages": messages}, config=config):
         print('========== <STEP> ==========')
         print(step)
         print('============================')

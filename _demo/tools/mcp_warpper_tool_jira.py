@@ -14,29 +14,7 @@ from typing import List, get_type_hints, Optional
 
 from managers.llm_manager import LLM
 
-from langchain.agents import AgentExecutor, initialize_agent
-from langchain.agents.agent_types import AgentType
 from langchain.schema.messages import ToolMessage
-
-# This function runs an async coroutine
-def async_to_sync_safe(coro):
-    result = None
-    error = None
-
-    def runner():
-        nonlocal result, error
-        try:
-            result = asyncio.run(coro)
-        except Exception as e:
-            error = e
-
-    thread = threading.Thread(target=runner)
-    thread.start()
-    thread.join()
-
-    if error:
-        raise error
-    return result
 
 def create_subagent_tool(mcp_agent, tool_name: str = "subagent", desc: str = None) -> StructuredTool:
     # Define the input schema
@@ -45,7 +23,7 @@ def create_subagent_tool(mcp_agent, tool_name: str = "subagent", desc: str = Non
         context: Optional[list[str]] = Field(default=[], description="Optional context")
 
     # Define the tool function
-    def call_agent(input: str, context: Optional[list[str]] = []) -> str:
+    async def call_agent(input: str, context: Optional[list[str]] = []) -> str:
         # You can optionally inject context if needed
         agent_input = {
             "messages": [
@@ -73,7 +51,7 @@ def create_subagent_tool(mcp_agent, tool_name: str = "subagent", desc: str = Non
         print("#############################################")
         print(f"Calling [{tool_name}] agent with input: {agent_input}")
         print("#############################################")
-        output = async_to_sync_safe(mcp_agent.ainvoke(agent_input))
+        output = await mcp_agent.ainvoke(agent_input)
 
         # ToolMessage의 content만 추출
         content = [
@@ -112,7 +90,7 @@ def create_subagent_tool(mcp_agent, tool_name: str = "subagent", desc: str = Non
     return StructuredTool.from_function(
         name=tool_name,
         description=f"{AGENT_TOOL_DESCRIPTION}",
-        func=call_agent,
+        coroutine=call_agent,
         args_schema=SubAgentInput,
     )
 

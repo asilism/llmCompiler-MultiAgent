@@ -18,26 +18,6 @@ from langgraph.prebuilt.chat_agent_executor import AgentState
 
 from langchain_core.tools import tool
 
-# This function runs an async coroutine
-def async_to_sync_safe(coro):
-    result = None
-    error = None
-
-    def runner():
-        nonlocal result, error
-        try:
-            result = asyncio.run(coro)
-        except Exception as e:
-            error = e
-
-    thread = threading.Thread(target=runner)
-    thread.start()
-    thread.join()
-
-    if error:
-        raise error
-    return result
-
 def create_subagent_tool(mcp_agent, tool_name: str = "subagent", desc: str = None) -> StructuredTool:
     # Define the input schema
     class SubAgentInput(BaseModel):
@@ -48,7 +28,7 @@ def create_subagent_tool(mcp_agent, tool_name: str = "subagent", desc: str = Non
         user_name: str
 
     # Define the tool function
-    def call_agent(input: str, context: Optional[list[str]] = []) -> str:
+    async def call_agent(input: str, context: Optional[list[str]] = []) -> str:
         # You can optionally inject context if needed
         agent_input = {
             "messages": [
@@ -69,15 +49,10 @@ def create_subagent_tool(mcp_agent, tool_name: str = "subagent", desc: str = Non
             ]
         }
 
-        #agent_input = {"input": input}
-        # if context:
-        #     config={"configurable": {"context": context}}
-        # else:
-        #     config = {}
         print("#############################################")
         print(f"Calling [{tool_name}] agent with input: {input} and context: {context}")
         print("#############################################")
-        output = async_to_sync_safe(mcp_agent.ainvoke(agent_input))
+        output = await mcp_agent.ainvoke(agent_input)
         
         # ToolMessage의 content만 추출
         content = [
@@ -102,26 +77,27 @@ def create_subagent_tool(mcp_agent, tool_name: str = "subagent", desc: str = Non
 
     AGENT_TOOL_DESCRIPTION = (
         "mail_agent(input: str, context: Optional[list[str]]) -> str\n"
-        "- This is a unified interface to a multi-tool agent. It takes a natural language input, interprets the request, and uses internal MCP tools to execute the appropriate actions.\n"
-        "- The agent is equipped with multiple tools about mail service and can autonomously choose the most suitable tool for the user's intent.\n"
-        "- The `input` should be a plain English request describing what the user wants to know or compute.\n"
-        "- The `context` includes supplemental information from previous steps or system memory to improve accuracy.\n"
-        "- If any required information is missing or unclear, the agent must rely only on the provided `context`. It must not access or explore other emails to guess missing data.\n"
-        "- The output is a final answer generated after the agent completes reasoning and tool execution.\n"
-        "- You should not assume the agent knows everything; it only knows what its tools allow it to observe or compute.\n"
-        "- To send an email, a valid and correctly formatted email address is required. If unknown, use the contact_agent to retrieve the correct email address.\n"
-        "- Do not include multiple unrelated questions in a single input. The agent processes one task per request.\n"
-        "- Do not try to fabricate or guess email content.\n"
-        "- Do not send an email if the contact search returns multiple people with the same name.\n"
-        "- If multiple recipients are found, call HumanInTheLoop and ask the user to clarify who they mean.\n"
-        "- You must never choose a recipient without explicit confirmation from the user.\n"
+        "\n"
+        "DO:\n"
+        "- Provide a natural language input describing what the user wants to know or compute.\n"
+        "- Use a valid and correctly formatted email address to send emails.\n"
+        "- Use the contact_agent to retrieve the correct email address if the recipient's address is unknown.\n"
+        "- Request explicit user confirmation if multiple contacts share the same name before sending the email.\n"
+        "- Rely only on the provided `context` when required information is missing or unclear.\n"
+        "- Return a final answer after reasoning and executing appropriate tools.\n"
+        "- Assume the agent only knows what its tools allow it to observe or compute.\n"
+        "- Process one task per request.\n"
+        "\n"
+        "DO NOT:\n"
+        "- Assume access to all user information or other emails.\n"
+        "- Include multiple unrelated questions in a single input.\n"
     )
 
     # Return as structured tool
     return StructuredTool.from_function(
         name=tool_name,
         description=f"{AGENT_TOOL_DESCRIPTION}",
-        func=call_agent,
+        coroutine=call_agent,
         args_schema=SubAgentInput,
     )
 

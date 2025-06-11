@@ -1,7 +1,6 @@
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.prebuilt import create_react_agent
 import asyncio
-import threading
 import json
 
 from pydantic import BaseModel, Field
@@ -14,29 +13,7 @@ from typing import List, get_type_hints, Optional
 
 from managers.llm_manager import LLM
 
-from langchain.agents import AgentExecutor, initialize_agent
-from langchain.agents.agent_types import AgentType
 from langchain.schema.messages import ToolMessage
-
-# This function runs an async coroutine
-def async_to_sync_safe(coro):
-    result = None
-    error = None
-
-    def runner():
-        nonlocal result, error
-        try:
-            result = asyncio.run(coro)
-        except Exception as e:
-            error = e
-
-    thread = threading.Thread(target=runner)
-    thread.start()
-    thread.join()
-
-    if error:
-        raise error
-    return result
 
 def create_subagent_tool(mcp_agent, tool_name: str = "subagent", desc: str = None) -> StructuredTool:
     # Define the input schema
@@ -45,7 +22,7 @@ def create_subagent_tool(mcp_agent, tool_name: str = "subagent", desc: str = Non
         context: Optional[list[str]] = Field(default=[], description="Optional context")
 
     # Define the tool function
-    def call_agent(input: str, context: Optional[list[str]] = []) -> str:
+    async def call_agent(input: str, context: Optional[list[str]] = []) -> str:
         # You can optionally inject context if needed
         agent_input = {
             "messages": [
@@ -70,25 +47,34 @@ def create_subagent_tool(mcp_agent, tool_name: str = "subagent", desc: str = Non
         #     config={"configurable": {"context": context}}
         # else:
         #     config = {}
+        print("#### CALL_AGENT: Step 1 – Preparing agent input ####")
         print("#############################################")
         print(f"Calling [{tool_name}] agent with input: {agent_input}")
         print("#############################################")
-        output = async_to_sync_safe(mcp_agent.ainvoke(agent_input))
+        try:
+            print("#### CALL_AGENT: Step 2 – Calling ainvoke ####")
+            output = await mcp_agent.ainvoke(agent_input)
+            print("#### CALL_AGENT: Step 3 – Received output ####")
+        except Exception as e:
+            print(f"#### CALL_AGENT ERROR: ainvoke failed: {e}")
+            raise  # 반드시 재전파
 
         # ToolMessage의 content만 추출
-        content = [
-            message.content
-            for message in output['messages']
-            if isinstance(message, ToolMessage)
-        ]
-
         try:
+            print("#### CALL_AGENT: Step 4 – Extracting content ####")
+            content = [
+                message.content
+                for message in output['messages']
+                if isinstance(message, ToolMessage)
+            ]
             result = json.loads(content[-1])
-        except json.JSONDecodeError:
-            result = content
+            print(f"#### CALL_AGENT: Extracted content: {content}")
 
-        if isinstance(result, list) and len(result) == 1:
-            result = result[0]
+            if isinstance(result, list) and len(result) == 1:
+                result = result[0]
+        except Exception as e:
+            print(f"#### CALL_AGENT ERROR: Failed to extract content: {e}")
+            result = content
         
         print("#############################################")
         print(f"Output from [{tool_name}] agent: {result}")
@@ -112,7 +98,7 @@ def create_subagent_tool(mcp_agent, tool_name: str = "subagent", desc: str = Non
     return StructuredTool.from_function(
         name=tool_name,
         description=f"{AGENT_TOOL_DESCRIPTION}",
-        func=call_agent,
+        coroutine=call_agent,
         args_schema=SubAgentInput,
     )
 
