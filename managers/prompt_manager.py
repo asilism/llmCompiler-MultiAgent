@@ -21,7 +21,7 @@ def load_from_json(data: str | dict | list) -> ChatPromptTemplate:
 
 
 plan_prompt_template_json = os.path.abspath(os.path.join(os.path.dirname(__file__), 'plan.json'))
-join_prompt_template_json = os.path.abspath(os.path.join(os.path.dirname(__file__), 'join.json'))
+join_prompt_template_json = os.path.abspath(os.path.join(os.path.dirname(__file__), 'join-hitl.json'))
 _plan: ChatPromptTemplate = load_from_json(plan_prompt_template_json)
 _join: ChatPromptTemplate = load_from_json(join_prompt_template_json)
 

@@ -9,6 +9,7 @@ from langchain_core.tools import StructuredTool
 from langgraph.graph.graph import CompiledGraph
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.prebuilt import create_react_agent
+from langchain_core.tools import tool
 
 def create_subagent_tool(
         mcp_agent: CompiledGraph,
@@ -97,6 +98,11 @@ def generate_tool_description(tool: StructuredTool) -> str:
     return "\n".join(lines)
 
 
+@tool
+def request_user_input_tool(question: str) -> str:
+    """Request additional input from the user. This tool should be called when more information is needed from the user to complete the task."""
+    return f"[HumanInTheLoop] {question}"
+
 def generate_descriptions_for_tools(tools: List[BaseTool]) -> str:
     header = (
         "You are an agent equipped with a set of MCP tools. Use these tools to accurately fulfill user requests.\n\n"
@@ -112,6 +118,8 @@ def generate_descriptions_for_tools(tools: List[BaseTool]) -> str:
         "- This tool does NOT retain the output of previous calls. If chaining values (e.g., using temperature in math), you MUST explicitly pass prior outputs via `context`.\n"
         "- You MUST NEVER treat `search`-type tool outputs as inputs for `get_weather`. If needed, extract values or use them in `context` only.\n"
         "- Always specify the units you expect when asking about weather. For example, ask 'what is the temperature in Celsius' instead of just 'what is the temperature'.\n"
+        "- If any critical information is missing or if there is ambiguity that requires confirmation from the user (e.g. multiple possible recipients, unclear instructions), then do use `request_user_input_tool` to explicitly ask the user for the required input or clarification."
+        
     )
     tool_descriptions = [generate_tool_description(tool) for tool in tools]
     return header + "\n\n" + "============== Available Tool ==============\n" +"\n\n".join(tool_descriptions)
@@ -127,6 +135,8 @@ def get_agent_client(config: dict, llm: BaseChatModel, *args, **kwargs) -> BaseT
         },
     })
     tools = asyncio.run(client.get_tools())
+    tools.append(request_user_input_tool)
+
     desc = generate_descriptions_for_tools(tools)
     agent: CompiledGraph = create_react_agent(model=llm, tools=tools, prompt=desc)
     print(f'# agent: {name}')

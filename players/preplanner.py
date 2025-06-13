@@ -12,8 +12,11 @@ _PREPLANNER_PROMPT_TEMPLATE = """
 {user_request}
 </USER_REQUEST>
 
-Break down the tasks needed to fulfill the user request.
-List only the task breakdown and their descriptions.""".strip()
+Break down the tasks needed to fulfill the user request.  
+Each task must be a minimal unit of action that contributes to fulfilling the overall request.  
+Only decompose the original request — do not infer, elaborate, or add any new information that is not explicitly stated.  
+Avoid rephrasing or interpreting the user's intent beyond what is written.
+Return only the list of task breakdowns and their brief descriptions.""".strip()
 
 _SIMPLE_PLAN_TEMPLATE = "<TASK_LIST>\n{}\n</TASK_LIST>"
 

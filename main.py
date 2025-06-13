@@ -1,11 +1,14 @@
 import asyncio
 import time
+import logging
 from typing import AsyncGenerator
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 import uvicorn
+import sys
+import uuid
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from managers.llm_manager import LLM
 from managers.tool_manager import ToolManager
 from managers.prompt_manager import PromptManager
@@ -15,6 +18,12 @@ import agents
 
 
 prepare()
+# TODO : make thread_id logic by user_id
+config = {
+    "configurable": {
+        "thread_id": uuid.uuid4(),
+    }
+}
 
 ToolManager.set(agents.get_agent_client("mcp", {
     "name": "mail_agent",
@@ -72,11 +81,30 @@ ToolManager.set(agents.get_agent_client("mcp", {
     },
 }, LLM.get()))
 
+# Conductor build
+start_time = time.time()
+conductor = build(LLM.get(), ToolManager.data(), PromptManager.get(LLM.name()))
+print(f'# Built conductor ({time.time() - start_time:.3f} seconds)')
 
 async def generate_response(user_message: str) -> AsyncGenerator[bytes, None]:
-    start_time = time.time()
-    conductor = build(LLM.get(), ToolManager.data(), PromptManager.get(LLM.name()))
-    print(f'# Built conductor ({time.time() - start_time:.3f} seconds)')
+    states = list(conductor.get_state_history(config))
+    messages = []
+    last_message:BaseMessage = None
+
+    if states and states[0].values:
+        last_message = states[0].values["messages"][-1]
+
+    if isinstance(last_message, AIMessage) or last_message is None:
+        print("Last message is from the AI or no messages found. Starting a new conversation.")
+        config["configurable"]["thread_id"] = uuid.uuid4()
+        messages = [HumanMessage(content=user_message)]
+    elif isinstance(last_message, SystemMessage) and "[HumanInTheLoop]" in last_message.content:
+        print("Last message indicates human input is needed. Continuing the conversation.")
+        messages = states[0].values["messages"] + [HumanMessage(content=user_message)]
+    else:
+        print("Last message is from the user or an unexpected type. Starting a new conversation.")
+        config["configurable"]["thread_id"] = uuid.uuid4()
+        messages = [HumanMessage(content=user_message)]
 
     start_time = time.time()
     print('\n########## START ##########\n')
@@ -85,8 +113,8 @@ async def generate_response(user_message: str) -> AsyncGenerator[bytes, None]:
     await asyncio.sleep(0.5)
     async for step in conductor.astream({
         "user_request": user_message,
-        "messages": [HumanMessage(content=user_message)],
-    }):
+        "messages": messages,
+    }, config=config):
         n_steps += 1
         step_name = list(step)[0]
         messages = step[step_name]["messages"]

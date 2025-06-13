@@ -5,7 +5,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 ################################################################################
 # TODO: for debug
 ################################################################################
-_DEBUG = True
+_DEBUG = False
 _DEBUG_STREAM_OUTPUT = False
 
 
